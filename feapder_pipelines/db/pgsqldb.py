@@ -137,8 +137,6 @@ class PgsqlDB(MysqlDB):
         ---------
         @result: 添加行数
         """
-        affect_count = None
-
         try:
             conn, cursor = self.get_connection()
             cursor.executemany(sql, datas)
@@ -153,6 +151,7 @@ class PgsqlDB(MysqlDB):
                 """
                 % (e, sql)
             )
+            affect_count = None
         finally:
             self.close_connection(conn, cursor)
 

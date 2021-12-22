@@ -23,12 +23,6 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 packages = setuptools.find_packages()
-packages.extend(
-    [
-        "feapder_pipelines",
-    ]
-)
-
 requires = [
     "feapder",
 ]

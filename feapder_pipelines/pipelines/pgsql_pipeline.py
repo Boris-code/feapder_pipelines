@@ -55,7 +55,7 @@ class PgsqlPipeline(BasePipeline):
         add_count = self.to_db.add_batch(sql, datas)
         # log.info(sql)
         datas_size = len(datas)
-        if add_count:
+        if add_count is not None:
             log.info(
                 "共导出 %s 条数据 到 %s, 重复 %s 条" % (datas_size, table, datas_size - add_count)
             )

@@ -51,6 +51,36 @@ def get_indexes_col_sql(table):
     return sql
 
 
+def get_primaryKey_col_sql(table):
+    """
+    @summary: 适用于PostgreSQL
+    ---------
+    @param table:
+
+    ---------
+    @result:
+    """
+    sql = """
+    SELECT
+        string_agg(DISTINCT t3.attname,',') AS primaryKeyColumn
+        ,t4.tablename AS tableName
+        , string_agg(cast(obj_description(relfilenode,'pg_class') as varchar),'') as comment
+    FROM
+        pg_constraint t1
+        INNER JOIN pg_class t2 ON t1.conrelid = t2.oid
+        INNER JOIN pg_attribute t3 ON t3.attrelid = t2.oid AND array_position(t1.conkey,t3.attnum) is not null
+        INNER JOIN pg_tables t4 on t4.tablename = t2.relname
+        INNER JOIN pg_index t5 ON t5.indrelid = t2.oid AND t3.attnum = ANY (t5.indkey)
+        LEFT JOIN pg_description t6 on t6.objoid=t3.attrelid and t6.objsubid=t3.attnum
+    WHERE t1.contype = 'p'
+        AND length(t3.attname) > 0
+        AND t2.oid = '{table}' :: regclass
+    group by t4.tablename;
+    """
+    sql = sql.format(table=table).replace("None", "null")
+    return sql
+
+
 def get_constraint_name_sql(table):
     """
     @summary: 适用于PostgreSQL
@@ -65,16 +95,21 @@ def get_constraint_name_sql(table):
 
 
 def make_insert_sql(
-    table, data, auto_update=False, update_columns=(), insert_ignore=False, indexes_cols=()
+    table,
+    data,
+    auto_update=False,
+    update_columns=(),
+    insert_ignore=False,
+    indexes_cols=(),
 ):
     """
     @summary: 适用于PostgreSQL
     ---------
     @param table:
     @param data: 表数据 json格式
-    @param auto_update: 使用的是replace into， 为完全覆盖已存在的数据
+    @param auto_update: 更新所有所有列的开关
     @param update_columns: 需要更新的列 默认全部，当指定值时，auto_update设置无效，当duplicate key冲突时更新指定的列
-    @param insert_ignore: 数据存在忽略
+    @param insert_ignore: 更新策略:数据存在则忽略本条数据
     @param indexes_cols: 索引列
     ---------
     @result:
@@ -101,11 +136,18 @@ def make_insert_sql(
         update_all_columns_ = ", ".join(
             ["{key}=excluded.{key}".format(key=key) for key in keys]
         )
-        sql = "insert into {table} {keys} values {values} on conflict({indexes_cols}) DO UPDATE SET %s" % update_all_columns_
-    else:
+        sql = (
+            "insert into {table} {keys} values {values} on conflict({indexes_cols}) DO UPDATE SET %s"
+            % update_all_columns_
+        )
+    elif insert_ignore:
         sql = "insert into {table} {keys} values {values} on conflict({indexes_cols}) DO NOTHING"
-
-    sql = sql.format(table=table, keys=keys, values=values, indexes_cols=indexes_cols).replace("None", "null")
+    else:
+        sql = "insert into {table} {keys} values {values}"
+    
+    sql = sql.format(
+        table=table, keys=keys, values=values, indexes_cols=indexes_cols
+    ).replace("None", "null")
     return sql
 
 
@@ -138,7 +180,12 @@ def make_update_sql(table, data, condition):
 
 
 def make_batch_sql(
-    table, datas, auto_update=False, update_columns=(), update_columns_value=(), indexes_cols=()
+    table,
+    datas,
+    auto_update=False,
+    update_columns=(),
+    update_columns_value=(),
+    indexes_cols=(),
 ):
     """
     @summary: 生产批量的sql
@@ -193,18 +240,25 @@ def make_batch_sql(
             keys=keys,
             values_placeholder=values_placeholder,
             update_columns=update_columns_,
-            indexes_cols=indexes_cols
+            indexes_cols=indexes_cols,
         )
     elif auto_update:
         update_all_columns_ = ", ".join(
             ["{key}=excluded.{key}".format(key=key) for key in keys]
         )
         sql = "insert into {table} {keys} values {values_placeholder} on conflict({indexes_cols}) DO UPDATE SET {update_all_columns_}".format(
-            table=table, keys=keys, values_placeholder=values_placeholder, indexes_cols=indexes_cols, update_all_columns_=update_all_columns_
+            table=table,
+            keys=keys,
+            values_placeholder=values_placeholder,
+            indexes_cols=indexes_cols,
+            update_all_columns_=update_all_columns_,
         )
     else:
         sql = "insert into {table} {keys} values {values_placeholder} on conflict({indexes_cols}) do nothing".format(
-            table=table, keys=keys, values_placeholder=values_placeholder, indexes_cols=indexes_cols
+            table=table,
+            keys=keys,
+            values_placeholder=values_placeholder,
+            indexes_cols=indexes_cols,
         )
 
     return sql, values

@@ -30,8 +30,9 @@ class PgsqlPipeline(BasePipeline):
 
     def __get_indexes_cols(self, table):
         if table not in self._indexes_cols_cached:
-            get_indexes_sql = tools.get_indexes_col_sql(table)
+            get_indexes_sql = tools.get_primaryKey_col_sql(table)
             indexes_cols = self.to_db.find(sql=get_indexes_sql) or "id"
+            log.info(f"主键列名:{indexes_cols[0][0]}")
             if indexes_cols:
                 indexes_cols = indexes_cols[0][0]
             self._indexes_cols_cached[table] = indexes_cols

@@ -35,6 +35,8 @@ class PgsqlPipeline(BasePipeline):
             log.info(f"主键列名:{indexes_cols[0][0]}")
             if indexes_cols:
                 indexes_cols = indexes_cols[0][0]
+            else:
+                raise Exception("请确保数据库有主键")
             self._indexes_cols_cached[table] = indexes_cols
 
         return self._indexes_cols_cached[table]

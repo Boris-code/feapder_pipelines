@@ -89,18 +89,18 @@ def get_constraint_name_sql(table):
     ---------
     @result:
     """
-    sql = "SELECT indexname FROM pg_indexes WHERE tablename = '{table}'"
+    sql = "SELECT indexname FROM pg_indexes WHERE tablename = '{table}' order by indexname"
     sql = sql.format(table=table).replace("None", "null")
     return sql
 
 
 def make_insert_sql(
-    table,
-    data,
-    auto_update=False,
-    update_columns=(),
-    insert_ignore=False,
-    indexes_cols=(),
+        table,
+        data,
+        auto_update=False,
+        update_columns=(),
+        insert_ignore=False,
+        constraint_name=(),
 ):
     """
     @summary: 适用于PostgreSQL
@@ -110,7 +110,7 @@ def make_insert_sql(
     @param auto_update: 更新所有所有列的开关
     @param update_columns: 需要更新的列 默认全部，当指定值时，auto_update设置无效，当duplicate key冲突时更新指定的列
     @param insert_ignore: 更新策略:数据存在则忽略本条数据
-    @param indexes_cols: 索引列
+    @param constraint_name: 约束名称，用于唯一性判断，通过alter table <table_name> add constraint <constraint_name> unique(<field1,filed2...>) 创建
     ---------
     @result:
     """
@@ -128,8 +128,8 @@ def make_insert_sql(
             ["{key}=excluded.{key}".format(key=key) for key in update_columns]
         )
         sql = (
-            "insert into {table} {keys} values {values} on conflict({indexes_cols}) DO UPDATE SET %s"
-            % update_columns_
+                "insert into {table} {keys} values {values} on conflict ON CONSTRAINT {constraint_name}  DO UPDATE SET %s"
+                % update_columns_
         )
 
     elif auto_update:
@@ -137,16 +137,16 @@ def make_insert_sql(
             ["{key}=excluded.{key}".format(key=key) for key in keys]
         )
         sql = (
-            "insert into {table} {keys} values {values} on conflict({indexes_cols}) DO UPDATE SET %s"
-            % update_all_columns_
+                "insert into {table} {keys} values {values} on conflict ON CONSTRAINT {constraint_name}  DO UPDATE SET %s"
+                % update_all_columns_
         )
     elif insert_ignore:
-        sql = "insert into {table} {keys} values {values} on conflict({indexes_cols}) DO NOTHING"
+        sql = "insert into {table} {keys} values {values} on conflict ON CONSTRAINT {constraint_name} DO NOTHING"
     else:
         sql = "insert into {table} {keys} values {values}"
-    
+
     sql = sql.format(
-        table=table, keys=keys, values=values, indexes_cols=indexes_cols
+        table=table, keys=keys, values=values, constraint_name=constraint_name
     ).replace("None", "null")
     return sql
 
@@ -185,7 +185,7 @@ def make_batch_sql(
     auto_update=False,
     update_columns=(),
     update_columns_value=(),
-    indexes_cols=(),
+    constraint_name=(),
 ):
     """
     @summary: 生产批量的sql
@@ -195,7 +195,7 @@ def make_batch_sql(
     @param auto_update: 使用的是replace into， 为完全覆盖已存在的数据
     @param update_columns: 需要更新的列 默认全部，当指定值时，auto_update设置无效，当duplicate key冲突时更新指定的列
     @param update_columns_value: 需要更新的列的值 默认为datas里边对应的值, 注意 如果值为字符串类型 需要主动加单引号， 如 update_columns_value=("'test'",)
-    @param indexes_cols: 索引列 str
+    @param constraint_name: 约束名称，用于唯一性判断，通过alter table <table_name> add constraint <constraint_name> unique(<field1,filed2...>) 创建
     ---------
     @result:
     """
@@ -235,30 +235,34 @@ def make_batch_sql(
             update_columns_ = ", ".join(
                 ["{key}=excluded.{key}".format(key=key) for key in update_columns]
             )
-        sql = "insert into {table} {keys} values {values_placeholder} ON CONFLICT({indexes_cols}) DO UPDATE SET {update_columns}".format(
+        # sql = "insert into {table} {keys} values {values_placeholder} ON CONFLICT({indexes_cols}) DO UPDATE SET {update_columns}".format(
+        sql = "insert into {table} {keys} values {values_placeholder} on conflict ON CONSTRAINT {constraint_name} DO UPDATE SET {update_columns}".format(
             table=table,
             keys=keys,
             values_placeholder=values_placeholder,
             update_columns=update_columns_,
-            indexes_cols=indexes_cols,
+            constraint_name=constraint_name,
         )
     elif auto_update:
         update_all_columns_ = ", ".join(
             ["{key}=excluded.{key}".format(key=key) for key in keys]
         )
-        sql = "insert into {table} {keys} values {values_placeholder} on conflict({indexes_cols}) DO UPDATE SET {update_all_columns_}".format(
+        # sql = "insert into {table} {keys} values {values_placeholder} on conflict({indexes_cols}) DO UPDATE SET {update_all_columns_}".format(
+        sql = "insert into {table} {keys} values {values_placeholder} on conflict ON CONSTRAINT {constraint_name} DO UPDATE SET {update_all_columns_}".format(
             table=table,
             keys=keys,
             values_placeholder=values_placeholder,
-            indexes_cols=indexes_cols,
+            constraint_name=constraint_name,
             update_all_columns_=update_all_columns_,
         )
     else:
-        sql = "insert into {table} {keys} values {values_placeholder} on conflict({indexes_cols}) do nothing".format(
+        # sql = "insert into {table} {keys} values {values_placeholder} on conflict({indexes_cols}) do nothing".format(
+        sql = "insert into {table} {keys} values {values_placeholder} on conflict ON CONSTRAINT {constraint_name} do nothing".format(
             table=table,
             keys=keys,
             values_placeholder=values_placeholder,
-            indexes_cols=indexes_cols,
+            constraint_name=constraint_name,
         )
 
     return sql, values
+

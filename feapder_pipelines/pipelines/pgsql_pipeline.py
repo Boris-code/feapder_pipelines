@@ -19,7 +19,8 @@ from feapder.utils.log import log
 class PgsqlPipeline(BasePipeline):
     def __init__(self):
         self._to_db = None
-        self._indexes_cols_cached = {}
+        # self._indexes_cols_cached = {}
+        self._constraint_cached = {}
 
     @property
     def to_db(self):
@@ -28,19 +29,16 @@ class PgsqlPipeline(BasePipeline):
 
         return self._to_db
 
-    def __get_indexes_cols(self, table):
-        if table not in self._indexes_cols_cached:
-            get_indexes_sql = tools.get_primaryKey_col_sql(table)
-            indexes_cols = self.to_db.find(sql=get_indexes_sql) or "id"
-            log.info(f"主键列名:{indexes_cols[0][0]}")
-            if indexes_cols:
-                indexes_cols = indexes_cols[0][0]
-            else:
-                log.error(f"无法找到主键列名")
-                raise Exception("请确保数据库有主键")
-            self._indexes_cols_cached[table] = indexes_cols
+    def __get_constraint_name(self, table):
+        if table not in self._constraint_cached:
+            get_constraint_sql = tools.get_constraint_name_sql(table)
+            constraint_names = self.to_db.find(sql=get_constraint_sql)
+            if not constraint_names:
+                log.error(f"无法找到唯一约束名")
+                raise Exception("请确保数据库有唯一约束")
+            self._constraint_cached[table] = constraint_names[0][0]
 
-        return self._indexes_cols_cached[table]
+        return self._constraint_cached[table]
 
     def save_items(self, table, items: List[Dict]) -> bool:
         """
@@ -54,7 +52,7 @@ class PgsqlPipeline(BasePipeline):
 
         """
         sql, datas = tools.make_batch_sql(
-            table, items, indexes_cols=self.__get_indexes_cols(table)
+            table, items, constraint_name=self.__get_constraint_name(table)
         )
         add_count = self.to_db.add_batch(sql, datas)
         # log.info(sql)
@@ -82,7 +80,7 @@ class PgsqlPipeline(BasePipeline):
             table,
             items,
             update_columns=update_keys or list(items[0].keys()),
-            indexes_cols=self.__get_indexes_cols(table),
+            constraint_name=self.__get_constraint_name(table),
         )
         # log.info(sql)
         update_count = self.to_db.add_batch(sql, datas)
